@@ -6,7 +6,7 @@ const { ethers } = require('ethers');
 
 // 2. Указываем токен бота и ваш CHAT_ID
 const TELEGRAM_TOKEN = '7997133490:AAHSwsW3tg85iGAd4ourHORVvF513ThAL40'; // Замените на свой токен бота
-const CHAT_ID = '6744685856'; // Замените на ваш chat_id
+const CHAT_ID = '947192975'; // Замените на ваш chat_id
 
 // 3. Инициализируем Telegram-бот
 const bot = new TelegramBot(TELEGRAM_TOKEN, { polling: false });
