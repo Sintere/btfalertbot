@@ -46,6 +46,21 @@ async function formatTokenAmount(amount, tokenAddress) {
     };
 }
 
+function findSwapTokens(transfers, userAddress) {
+    // Find WETH transfer (should be present in internal transfers)
+    const wethTransfer = transfers.find(t => 
+        t.tokenInfo.symbol === 'WETH' && 
+        t.from.toLowerCase() === CONTRACT_ADDRESS.toLowerCase()
+    );
+
+    // Find the token being received by user
+    const receivedTransfer = transfers.find(t => 
+        t.to.toLowerCase() === userAddress.toLowerCase()
+    );
+
+    return { wethTransfer, receivedTransfer };
+}
+
 async function main() {
     console.log('Starting to monitor transactions...');
 
@@ -57,8 +72,8 @@ async function main() {
             for (let tx of block.transactions) {
                 if (tx.to?.toLowerCase() === CONTRACT_ADDRESS.toLowerCase()) {
                     const receipt = await provider.getTransactionReceipt(tx.hash);
+                    const userAddress = tx.from.toLowerCase();
                     
-                    // Track all transfers to identify token movements
                     const transfers = [];
                     for (const log of receipt.logs) {
                         try {
@@ -74,38 +89,21 @@ async function main() {
                                 transfers.push({
                                     token: log.address,
                                     tokenInfo,
-                                    from: decoded.args.from,
-                                    to: decoded.args.to
+                                    from: decoded.args.from.toLowerCase(),
+                                    to: decoded.args.to.toLowerCase()
                                 });
                             }
                         } catch (e) {}
                     }
 
-                    // Determine tokens involved in swap
-                    let swapDetails = '';
-                    if (transfers.length >= 2) {
-                        const tokenIn = transfers[0];
-                        const tokenOut = transfers[transfers.length - 1];
-                        swapDetails = `Swapped ${tokenIn.tokenInfo.amount} ${tokenIn.tokenInfo.symbol} ` +
-                                    `(${tokenIn.tokenInfo.name}) for ` +
-                                    `${tokenOut.tokenInfo.amount} ${tokenOut.tokenInfo.symbol} ` +
-                                    `(${tokenOut.tokenInfo.name})\n\n`;
-                    }
-
+                    const { wethTransfer, receivedTransfer } = findSwapTokens(transfers, userAddress);
+                    
+                    // Create single-line message with both tokens
                     const message = 
-                        `🔄 Swap Transaction Detected!\n\n` +
-                        swapDetails +
-                        `Detailed Token Movements:\n` +
-                        transfers.map(t => 
-                            `${t.tokenInfo.symbol} (${t.tokenInfo.name})\n` +
-                            `Amount: ${t.tokenInfo.formatted}\n` +
-                            `From: ${t.from.slice(0, 6)}...${t.from.slice(-4)}\n` +
-                            `To: ${t.to.slice(0, 6)}...${t.to.slice(-4)}`
-                        ).join('\n\n') +
-                        `\n\nTx Hash: ${tx.hash}\n` +
-                        `Block: ${blockNumber}\n` +
-                        `From: ${tx.from}\n` +
-                        `Gas Used: ${receipt.gasUsed.toString()}\n` +
+                        '🔄 Swap ' +
+                        `↔️ 1.0 WETH ` +
+                        (receivedTransfer ? `↙️ ${receivedTransfer.tokenInfo.formatted} ` : '') +
+                        `From: ${tx.from} ` +
                         `Status: ${receipt.status === 1 ? '✅ Success' : '❌ Failed'}`;
 
                     await bot.sendMessage(CHAT_ID, message);
