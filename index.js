@@ -46,20 +46,24 @@ async function formatTokenAmount(amount, tokenAddress) {
     };
 }
 
-function identifySwapTokens(transfers) {
-    // Find the first "out" transfer (from user's address)
-    const tokenInTransfer = transfers.find(t => 
-        t.from.toLowerCase() !== CONTRACT_ADDRESS.toLowerCase() && 
-        t.to.toLowerCase() === CONTRACT_ADDRESS.toLowerCase()
+function findSwapTokens(transfers, userAddress) {
+    // Find the token being sent (from user to contract)
+    const tokenInIndex = transfers.findIndex(t => 
+        t.from.toLowerCase() === userAddress.toLowerCase()
     );
 
-    // Find the last "in" transfer (to user's address)
-    const tokenOutTransfer = transfers.findLast(t => 
-        t.from.toLowerCase() === CONTRACT_ADDRESS.toLowerCase() && 
-        t.to.toLowerCase() !== CONTRACT_ADDRESS.toLowerCase()
+    if (tokenInIndex === -1) return { tokenIn: null, tokenOut: null };
+
+    // Find the token being received (from contract to user)
+    const tokenOutIndex = transfers.findIndex((t, index) => 
+        index > tokenInIndex && 
+        t.to.toLowerCase() === userAddress.toLowerCase()
     );
 
-    return { tokenInTransfer, tokenOutTransfer };
+    return {
+        tokenIn: tokenInIndex !== -1 ? transfers[tokenInIndex] : null,
+        tokenOut: tokenOutIndex !== -1 ? transfers[tokenOutIndex] : null
+    };
 }
 
 async function main() {
@@ -98,15 +102,13 @@ async function main() {
                         } catch (e) {}
                     }
 
-                    // Identify the actual swap tokens
-                    const { tokenInTransfer, tokenOutTransfer } = identifySwapTokens(transfers);
+                    const { tokenIn, tokenOut } = findSwapTokens(transfers, userAddress);
                     
                     let swapDetails = '';
-                    if (tokenInTransfer && tokenOutTransfer) {
+                    if (tokenIn && tokenOut) {
                         swapDetails = 
-                            `Swapped Tokens:\n` +
-                            `▪️ Sent: ${tokenInTransfer.tokenInfo.formatted} (${tokenInTransfer.tokenInfo.name})\n` +
-                            `▪️ Received: ${tokenOutTransfer.tokenInfo.formatted} (${tokenOutTransfer.tokenInfo.name})\n\n`;
+                            `Swapped:\n` +
+                            `${tokenIn.tokenInfo.formatted} ➜ ${tokenOut.tokenInfo.formatted}\n\n`;
                     }
 
                     const message = 
@@ -116,7 +118,7 @@ async function main() {
                         transfers.map(t => {
                             const direction = t.from === userAddress ? "OUT ↗️" : 
                                             t.to === userAddress ? "IN ↙️" : "INTERNAL ↔️";
-                            return `${direction} ${t.tokenInfo.formatted} (${t.tokenInfo.name})\n` +
+                            return `${direction} ${t.tokenInfo.formatted}\n` +
                                    `From: ${t.from.slice(0, 6)}...${t.from.slice(-4)}\n` +
                                    `To: ${t.to.slice(0, 6)}...${t.to.slice(-4)}`;
                         }).join('\n\n') +
