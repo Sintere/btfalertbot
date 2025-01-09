@@ -46,6 +46,22 @@ async function formatTokenAmount(amount, tokenAddress) {
     };
 }
 
+function identifySwapTokens(transfers) {
+    // Find the first "out" transfer (from user's address)
+    const tokenInTransfer = transfers.find(t => 
+        t.from.toLowerCase() !== CONTRACT_ADDRESS.toLowerCase() && 
+        t.to.toLowerCase() === CONTRACT_ADDRESS.toLowerCase()
+    );
+
+    // Find the last "in" transfer (to user's address)
+    const tokenOutTransfer = transfers.findLast(t => 
+        t.from.toLowerCase() === CONTRACT_ADDRESS.toLowerCase() && 
+        t.to.toLowerCase() !== CONTRACT_ADDRESS.toLowerCase()
+    );
+
+    return { tokenInTransfer, tokenOutTransfer };
+}
+
 async function main() {
     console.log('Starting to monitor transactions...');
 
@@ -57,6 +73,7 @@ async function main() {
             for (let tx of block.transactions) {
                 if (tx.to?.toLowerCase() === CONTRACT_ADDRESS.toLowerCase()) {
                     const receipt = await provider.getTransactionReceipt(tx.hash);
+                    const userAddress = tx.from.toLowerCase();
                     
                     // Track all transfers to identify token movements
                     const transfers = [];
@@ -74,34 +91,35 @@ async function main() {
                                 transfers.push({
                                     token: log.address,
                                     tokenInfo,
-                                    from: decoded.args.from,
-                                    to: decoded.args.to
+                                    from: decoded.args.from.toLowerCase(),
+                                    to: decoded.args.to.toLowerCase()
                                 });
                             }
                         } catch (e) {}
                     }
 
-                    // Determine tokens involved in swap
+                    // Identify the actual swap tokens
+                    const { tokenInTransfer, tokenOutTransfer } = identifySwapTokens(transfers);
+                    
                     let swapDetails = '';
-                    if (transfers.length >= 2) {
-                        const tokenIn = transfers[0];
-                        const tokenOut = transfers[transfers.length - 1];
-                        swapDetails = `Swapped ${tokenIn.tokenInfo.amount} ${tokenIn.tokenInfo.symbol} ` +
-                                    `(${tokenIn.tokenInfo.name}) for ` +
-                                    `${tokenOut.tokenInfo.amount} ${tokenOut.tokenInfo.symbol} ` +
-                                    `(${tokenOut.tokenInfo.name})\n\n`;
+                    if (tokenInTransfer && tokenOutTransfer) {
+                        swapDetails = 
+                            `Swapped Tokens:\n` +
+                            `▪️ Sent: ${tokenInTransfer.tokenInfo.formatted} (${tokenInTransfer.tokenInfo.name})\n` +
+                            `▪️ Received: ${tokenOutTransfer.tokenInfo.formatted} (${tokenOutTransfer.tokenInfo.name})\n\n`;
                     }
 
                     const message = 
                         `🔄 Swap Transaction Detected!\n\n` +
                         swapDetails +
-                        `Detailed Token Movements:\n` +
-                        transfers.map(t => 
-                            `${t.tokenInfo.symbol} (${t.tokenInfo.name})\n` +
-                            `Amount: ${t.tokenInfo.formatted}\n` +
-                            `From: ${t.from.slice(0, 6)}...${t.from.slice(-4)}\n` +
-                            `To: ${t.to.slice(0, 6)}...${t.to.slice(-4)}`
-                        ).join('\n\n') +
+                        `All Token Movements:\n` +
+                        transfers.map(t => {
+                            const direction = t.from === userAddress ? "OUT ↗️" : 
+                                            t.to === userAddress ? "IN ↙️" : "INTERNAL ↔️";
+                            return `${direction} ${t.tokenInfo.formatted} (${t.tokenInfo.name})\n` +
+                                   `From: ${t.from.slice(0, 6)}...${t.from.slice(-4)}\n` +
+                                   `To: ${t.to.slice(0, 6)}...${t.to.slice(-4)}`;
+                        }).join('\n\n') +
                         `\n\nTx Hash: ${tx.hash}\n` +
                         `Block: ${blockNumber}\n` +
                         `From: ${tx.from}\n` +
