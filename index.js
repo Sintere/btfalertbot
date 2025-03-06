@@ -3,7 +3,7 @@ const { ethers } = require('ethers');
 
 const TELEGRAM_TOKEN = '7997133490:AAHSwsW3tg85iGAd4ourHORVvF513ThAL40';
 const CHAT_ID = '947192975';
-const bot = new TelegramBot(TELEGRAM_TOKEN, { polling: false });
+const bot = new TelegramBot(TELEGRAM_TOKEN, { polling: true }); // Было false
 const RPC_URL = 'https://mainnet.bitfinity.network/';
 const CONTRACT_ADDRESS = '0xe3Fe6cDd76428F8FDC5ae09c0D5B189DD1298E58';
 
@@ -68,6 +68,19 @@ function findSwapTokens(transfers, userAddress) {
 
 async function main() {
     console.log('Starting to monitor transactions...');
+
+    // Добавьте этот блок для обработки команды /status
+  bot.onText(/\/status/, async (msg) => {
+    const chatId = msg.chat.id;
+    try {
+      // Проверяем соединение с RPC-узлом
+      const blockNumber = await provider.getBlockNumber();
+      await bot.sendMessage(chatId, `✅ Сервер работает! Последний блок: ${blockNumber}`);
+    } catch (error) {
+      await bot.sendMessage(chatId, "❌ Сервер недоступен. Ошибка подключения к RPC.");
+      console.error('RPC Error:', error);
+    }
+  });
 
     provider.on('block', async (blockNumber) => {
         console.log(`New block detected: ${blockNumber}`);
